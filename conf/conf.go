@@ -7,13 +7,22 @@ import (
 )
 
 type Conf struct {
-	CertFile       string
-	Keyfile        string
-	HttpPort       string
-	HttpsPort      string
-	GetPath        string
-	RefreshPath    string
+	CertFile    string
+	Keyfile     string
+	HttpPort    string
+	HttpsPort   string
+	GetPath     string
+	RefreshPath string
+
+	ExpTimeAccess  int
+	ExpTimeRefresh int
+
 	PgsqlNameServe string
+
+	MailHost         string
+	MailHostPortSmtp int
+	MailUserName     string
+	MailPassword     string
 }
 
 func NewConf() Conf {

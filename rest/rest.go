@@ -80,7 +80,7 @@ func (g HTTPHandler) ServeGet(w http.ResponseWriter, req *http.Request) {
 
 func (r HTTPHandler) ServeRefresh(w http.ResponseWriter, req *http.Request) {
 	type Request struct {
-		RefreshToken string `json:"RefreshToken"`
+		RefreshToken string `json:"SetRefreshToken"`
 		AccessToken  string `json:"AccessToken"`
 		Ctx          context.Context
 	}
