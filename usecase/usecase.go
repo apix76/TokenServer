@@ -20,7 +20,7 @@ type ErrorsBody struct {
 type UseCase struct {
 	DB    db.DbAccess
 	Token token.Token
-	SmtpConfig
+	Smpt  SmtpConfig
 }
 
 type SmtpConfig struct {
@@ -84,22 +84,22 @@ func (u *UseCase) RefreshSession(Refresh, UserIp string) (string, string, error)
 
 func (u *UseCase) sendEmail(guid string) error {
 	//TODO: РЕализовать функцию до конца
-	log.Println("Sending email: ", u.DB.GetEmail(guid))
+	//	log.Println("Sending email: ", u.DB.GetEmail(guid))
 	server := mail.NewSMTPClient()
 
-	server.Host = u.SmtpConfig.Host
-	server.Port = u.SmtpConfig.Port
-	server.Username = u.SmtpConfig.Username
-	server.Password = u.SmtpConfig.Password
+	server.Host = u.Smpt.Host
+	server.Port = u.Smpt.Port
+	server.Username = u.Smpt.Username
+	server.Password = u.Smpt.Password
 	server.Encryption = mail.EncryptionSTARTTLS
 
-	server.KeepAlive = false
+	server.KeepAlive = true
 
 	server.ConnectTimeout = 10 * time.Second
 
 	server.SendTimeout = 10 * time.Second
 
-	server.TLSConfig = &tls.Config{InsecureSkipVerify: true}
+	server.TLSConfig = &tls.Config{}
 
 	smtpClient, err := server.Connect()
 
@@ -108,7 +108,7 @@ func (u *UseCase) sendEmail(guid string) error {
 	}
 
 	email := mail.NewMSG()
-	email.SetFrom(u.Username).
+	email.SetFrom(u.Smpt.Username).
 		AddTo(u.DB.GetEmail(guid)).
 		SetSubject("Email warning")
 

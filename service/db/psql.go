@@ -27,6 +27,7 @@ func New(dsn string) (DbAccess, error) {
 
 	_, err = db.db.Exec(sql)
 
+	sqlcreate = sqlbuilder.PostgreSQL.NewCreateTableBuilder()
 	sql = sqlcreate.CreateTable("usersMail").IfNotExists().
 		Define("guid", "TEXT", "NOT NULL", "PRIMARY KEY").
 		Define("email", "TEXT", "NOT NULL").String()

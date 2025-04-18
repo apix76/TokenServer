@@ -3,7 +3,6 @@ package rest
 import (
 	"TokenServer/conf"
 	"TokenServer/usecase"
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -15,13 +14,31 @@ type HTTPHandler struct {
 	usecase.UseCase
 }
 
+func UseRealIP(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var UserIp string
+		if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
+			UserIp = strings.Split(ip, ",")[0]
+		}
+		if ip := r.Header.Get("X-Real-IP"); ip != "" && UserIp == "" {
+			UserIp = strings.Split(ip, ",")[0]
+		}
+
+		if UserIp != "" {
+			r.RemoteAddr = UserIp + ":0"
+		}
+
+		h.ServeHTTP(w, r)
+	})
+}
+
 func Server(conf conf.Conf, useCase usecase.UseCase) {
 
 	handler := HTTPHandler{useCase}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc(conf.GetPath, handler.ServeGet)
-	mux.HandleFunc(conf.RefreshPath, handler.ServeRefresh)
+	mux.Handle(conf.GetPath, UseRealIP(http.HandlerFunc(handler.ServeGet)))
+	mux.Handle(conf.RefreshPath, UseRealIP(http.HandlerFunc(handler.ServeRefresh)))
 	if conf.CertFile != "" && conf.Keyfile != "" {
 		fmt.Println("Starting HTTPS server")
 		go http.ListenAndServeTLS(conf.HttpsPort, conf.CertFile, conf.Keyfile, mux)
@@ -55,19 +72,9 @@ func (g HTTPHandler) ServeGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if ip := req.Header.Get("X-Forwarded-For"); ip != "" {
-		g.UseCase.UserIp = strings.Split(ip, ",")[0]
-	}
+	UserIp := strings.Split(req.RemoteAddr, ":")[0]
 
-	if ip := req.Header.Get("X-Real-IP"); ip != "" && g.UseCase.UserIp == "" {
-		g.UseCase.UserIp = strings.Split(ip, ",")[0]
-	}
-
-	if g.UseCase.UserIp == "" {
-		g.UseCase.UserIp = strings.Split(req.RemoteAddr, ":")[0]
-	}
-
-	res.AccessToken, res.RefreshToken, err = g.CreateSession(set.Guid)
+	res.AccessToken, res.RefreshToken, err = g.CreateSession(set.Guid, UserIp)
 	if err != nil {
 		//TODO: Обработать ошибку
 	}
@@ -80,9 +87,7 @@ func (g HTTPHandler) ServeGet(w http.ResponseWriter, req *http.Request) {
 
 func (r HTTPHandler) ServeRefresh(w http.ResponseWriter, req *http.Request) {
 	type Request struct {
-		RefreshToken string `json:"SetRefreshToken"`
-		AccessToken  string `json:"AccessToken"`
-		Ctx          context.Context
+		RefreshToken string `json:"RefreshToken"`
 	}
 	type Response struct {
 		RefreshToken string
@@ -99,26 +104,9 @@ func (r HTTPHandler) ServeRefresh(w http.ResponseWriter, req *http.Request) {
 	}
 	defer req.Body.Close()
 
-	// FIXME: Куда? ctx принято передавать первым аргументам в функции, где он используется.
-	// FIXME: Можно использовать req.Context() для большей гибкости
-	set.Ctx = context.Background()
+	UserIp := strings.Split(req.RemoteAddr, ":")[0]
 
-	// FIXME: Дублированный код с ServeGet - можно вынести в middleware либо
-	// хотя бы в функцию.
-	if ip := req.Header.Get("X-Forwarded-For"); ip != "" {
-		// FIXME: Не мешать данные с конфигурацией - userIP передавать явно там, где он нужен.
-		r.UseCase.UserIp = strings.Split(ip, ",")[0]
-	}
-
-	if ip := req.Header.Get("X-Real-IP"); ip != "" && r.UseCase.UserIp == "" {
-		r.UseCase.UserIp = strings.Split(ip, ",")[0]
-	}
-
-	if r.UseCase.UserIp == "" {
-		r.UseCase.UserIp = strings.Split(req.RemoteAddr, ":")[0]
-	}
-
-	res.AccessToken, res.RefreshToken, err = r.UseCase.RefreshSession(set.AccessToken, set.RefreshToken)
+	res.AccessToken, res.RefreshToken, err = r.UseCase.RefreshSession(set.RefreshToken, UserIp)
 	if err != nil {
 		// FIXME: Какой статус ошибки?
 		if _, err := w.Write([]byte(err.Error())); err != nil {

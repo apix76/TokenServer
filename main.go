@@ -18,6 +18,12 @@ func main() {
 			ExpTimeAccess:  con.ExpTimeAccess,
 			ExpTimeRefresh: con.ExpTimeRefresh,
 		},
+		Smpt: usecase.SmtpConfig{
+			Host:     con.MailHost,
+			Port:     con.MailHostPortSmtp,
+			Username: con.MailUserName,
+			Password: con.MailPassword,
+		},
 	}
 
 	var err error
