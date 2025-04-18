@@ -91,7 +91,7 @@ func (u *UseCase) sendEmail(guid string) error {
 	server.Port = u.Smpt.Port
 	server.Username = u.Smpt.Username
 	server.Password = u.Smpt.Password
-	server.Encryption = mail.EncryptionSTARTTLS
+	server.Encryption = mail.EncryptionSSLTLS
 
 	server.KeepAlive = true
 
