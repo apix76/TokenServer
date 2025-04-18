@@ -9,6 +9,7 @@ import (
 type Conf struct {
 	CertFile    string
 	Keyfile     string
+	ServerDomen string
 	HttpPort    string
 	HttpsPort   string
 	GetPath     string
