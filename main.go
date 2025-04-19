@@ -32,10 +32,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	rest.Server(con, useCase)
 
 }

@@ -13,10 +13,6 @@ import (
 	"time"
 )
 
-type ErrorsBody struct {
-	Header string // "Contents_type/json"
-	Body   string // "Errors: ..."
-}
 type UseCase struct {
 	DB    db.DbAccess
 	Token token.Token
@@ -30,61 +26,73 @@ type SmtpConfig struct {
 	Password string
 }
 
-func (u *UseCase) CreateSession(guid, UserIp string) (string, string, error) {
-	refreshToken, id := u.Token.CreateRefreshToken(UserIp, guid)
-
-	err := u.DB.AddToken(guid, id, u.hashSHA256(refreshToken))
+func (u *UseCase) CreateSession(guid, UserIp string) (string, string, error, int) {
+	refreshToken, id, err := u.Token.CreateRefreshToken(UserIp, guid)
 	if err != nil {
-		return "", "", err
+		return "", "", err, 500
 	}
-	accessToken := u.Token.CreateAccessToken(UserIp, guid, id)
+
+	err = u.DB.AddToken(guid, id, u.hashSHA256(refreshToken))
+	if err != nil {
+		log.Println("Error db.add: ", err)
+		return "", "", err, 500
+	}
+
+	accessToken, err := u.Token.CreateAccessToken(UserIp, guid, id)
+	if err != nil {
+		return "", "", err, 500
+	}
+
 	RefreshBase64 := base64.StdEncoding.EncodeToString([]byte(refreshToken))
-	return accessToken, RefreshBase64, nil
+	return accessToken, RefreshBase64, nil, 200
 }
 
-func (u *UseCase) RefreshSession(Refresh, UserIp string) (string, string, error) {
+func (u *UseCase) RefreshSession(Refresh, UserIp string) (string, string, error, int) {
 	RefreshByte, err := base64.StdEncoding.DecodeString(Refresh)
 	if err != nil {
-		return "", "", err
+		return "", "", err, 500
 	}
 
 	Refresh = string(RefreshByte)
 
 	claimsRefresh, err := u.Token.Parse(Refresh)
 	if err != nil {
-		return "", "", err
+		return "", "", err, 200
 	}
 
 	guid := claimsRefresh.UserID
 	if UserIp != claimsRefresh.IP {
 		u.sendEmail(guid)
-		err = errors.New("email warning")
 	}
 
 	OldRefreshBcrypt, err := u.DB.GetRefreshToken(claimsRefresh.ID)
 	if OldRefreshBcrypt == "" {
-		return "", "", errors.New("SetRefreshToken token not exist")
+		return "", "", errors.New("SetRefreshToken token not exist"), 200
 	}
 
 	if err = u.Token.CheckTokens(OldRefreshBcrypt, u.hashSHA256(Refresh)); err != nil {
-		return "", "", fmt.Errorf("Mismatch refresh token: %s", err)
+		return "", "", fmt.Errorf("Mismatch refresh token: %s", err), 200
 	}
 
-	NewRefreshToken, id := u.Token.CreateRefreshToken(UserIp, guid)
+	NewRefreshToken, id, err := u.Token.CreateRefreshToken(UserIp, guid)
+	if err != nil {
+		return "", "", err, 500
+	}
 
 	err = u.DB.SetRefreshToken(claimsRefresh.ID, u.hashSHA256(NewRefreshToken))
 	if err != nil {
-		return "", "", err
+		return "", "", err, 500
 	}
 	RefreshBase64 := base64.StdEncoding.EncodeToString([]byte(NewRefreshToken))
-	NewAccessToken := u.Token.CreateAccessToken(UserIp, guid, id)
+	NewAccessToken, err := u.Token.CreateAccessToken(UserIp, guid, id)
+	if err != nil {
+		return "", "", err, 500
+	}
 
-	return NewAccessToken, RefreshBase64, err
+	return NewAccessToken, RefreshBase64, err, 200
 }
 
 func (u *UseCase) sendEmail(guid string) error {
-	//TODO: РЕализовать функцию до конца
-	//	log.Println("Sending email: ", u.DB.GetEmail(guid))
 	server := mail.NewSMTPClient()
 
 	server.Host = u.Smpt.Host
@@ -104,7 +112,8 @@ func (u *UseCase) sendEmail(guid string) error {
 	smtpClient, err := server.Connect()
 
 	if err != nil {
-		log.Fatal(err)
+		log.Println("SMTP connection error:", err)
+		return err
 	}
 
 	email := mail.NewMSG()
@@ -115,7 +124,8 @@ func (u *UseCase) sendEmail(guid string) error {
 	email.SetBody(mail.TextPlain, "email warning")
 
 	if email.Error != nil {
-		log.Fatal(email.Error)
+		log.Println("SMTP error:", email.Error)
+		return email.Error
 	}
 
 	err = email.Send(smtpClient)

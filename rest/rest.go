@@ -5,7 +5,6 @@ import (
 	"TokenServer/usecase"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 )
@@ -56,7 +55,7 @@ func (g HTTPHandler) ServeGet(w http.ResponseWriter, req *http.Request) {
 		RefreshToken string
 		AccessToken  string
 	}
-
+	httpStatus := 0
 	set := Request{}
 	res := Response{}
 
@@ -74,14 +73,16 @@ func (g HTTPHandler) ServeGet(w http.ResponseWriter, req *http.Request) {
 
 	UserIp := strings.Split(req.RemoteAddr, ":")[0]
 
-	res.AccessToken, res.RefreshToken, err = g.CreateSession(set.Guid, UserIp)
+	res.AccessToken, res.RefreshToken, err, httpStatus = g.CreateSession(set.Guid, UserIp)
 	if err != nil {
-		//TODO: Обработать ошибку
+		w.WriteHeader(httpStatus)
+		return
 	}
 
 	err = json.NewEncoder(w).Encode(res)
 	if err != nil {
-		log.Fatal(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 }
 
@@ -93,31 +94,29 @@ func (r HTTPHandler) ServeRefresh(w http.ResponseWriter, req *http.Request) {
 		RefreshToken string
 		AccessToken  string
 	}
-
+	httpStatus := 0
 	set := Request{}
 	res := Response{}
 
 	err := json.NewDecoder(req.Body).Decode(&set)
 	if err != nil {
-		// FIXME: Если я передам невалидные данные - сервер скрашится?
-		log.Fatal(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 	defer req.Body.Close()
 
 	UserIp := strings.Split(req.RemoteAddr, ":")[0]
 
-	res.AccessToken, res.RefreshToken, err = r.UseCase.RefreshSession(set.RefreshToken, UserIp)
+	res.AccessToken, res.RefreshToken, err, httpStatus = r.UseCase.RefreshSession(set.RefreshToken, UserIp)
 	if err != nil {
-		// FIXME: Какой статус ошибки?
-		if _, err := w.Write([]byte(err.Error())); err != nil {
-			log.Fatal(err)
-		}
+		w.WriteHeader(httpStatus)
+		w.Write([]byte(err.Error()))
 		return
 	}
+
 	err = json.NewEncoder(w).Encode(res)
 	if err != nil {
-		// FIXME: Точно 400?
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 }

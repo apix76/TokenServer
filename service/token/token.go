@@ -22,7 +22,7 @@ type Claims struct {
 	IP     string
 }
 
-func (t *Token) CreateRefreshToken(ip, guid string) (string, string) {
+func (t *Token) CreateRefreshToken(ip, guid string) (string, string, error) {
 	idSessionInt := rand.Int63()
 	idSession := fmt.Sprintf("%v", idSessionInt)
 
@@ -34,12 +34,13 @@ func (t *Token) CreateRefreshToken(ip, guid string) (string, string) {
 	})
 	token, err := RefreshToken.SignedString([]byte(t.Key))
 	if err != nil {
-		log.Fatal(err)
+		log.Println("Error refresh creating token ", err)
+		return "", "", err
 	}
-	return token, idSession
+	return token, idSession, nil
 }
 
-func (t *Token) CreateAccessToken(ip, guid, idSession string) string {
+func (t *Token) CreateAccessToken(ip, guid, idSession string) (string, error) {
 	AccessToken := jwt.NewWithClaims(jwt.SigningMethodHS512, jwt.MapClaims{
 		"exp":      jwt.NewNumericDate(time.Now().Add(time.Duration(t.ExpTimeAccess) * time.Minute)),
 		"jti":      idSession,
@@ -48,9 +49,10 @@ func (t *Token) CreateAccessToken(ip, guid, idSession string) string {
 	})
 	token, err := AccessToken.SignedString([]byte(t.Key))
 	if err != nil {
-		log.Fatal(err)
+		log.Println("Error access creating token ", err)
+		return "", err
 	}
-	return token
+	return token, nil
 }
 
 func (t *Token) CheckTokens(hashtoken string, RefreshToken []byte) error {
